@@ -107,6 +107,45 @@ func TestHouseRobber(t *testing.T) {
 	}
 }
 
+func TestBinarySearch(t *testing.T) {
+	type Results struct {
+		expected int
+		input    []int
+		target   int
+	}
+	testCases := []Results{
+		{4, []int{-1, 0, 3, 5, 9, 13}, 9},
+		{0, []int{-1, 0, 3, 5, 9, 12, 13}, -1},
+		{3, []int{-1, 0, 3, 5, 9, 12, 13}, 5},
+		{-1, []int{-1, 0, 3, 5, 9, 12, 13}, 11},
+		{6, []int{-1, 0, 3, 5, 9, 12, 13}, 13},
+	}
+
+	search := func(nums []int, target int) int {
+		var left, pivot, right int = 0, 0, len(nums) - 1
+
+		for left <= right {
+			pivot = left + (right-left)/2
+			if nums[pivot] == target {
+				return pivot
+			}
+			if target < nums[pivot] {
+				right = pivot - 1
+			} else {
+				left = pivot + 1
+			}
+		}
+		return -1
+	}
+
+	for i, tc := range testCases {
+		actual := search(tc.input, tc.target)
+		if actual != tc.expected {
+			t.Errorf("Tesstcase [%d] failed, Expected [%d] but wrongly calculated to [%d]", i, tc.expected, actual)
+		}
+	}
+}
+
 var min = func(a, b int) int {
 	if a < b {
 		return a
