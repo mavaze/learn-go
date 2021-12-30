@@ -8,6 +8,29 @@ import (
 	"time"
 )
 
+// Note 1: Only the sender should close a channel, never the receiver. Sending on a closed channel will cause a panic.
+// Note 2: Channels aren't like files; you don't usually need to close them.
+//  Closing is only necessary when the receiver must be told there are no more values coming, such as to terminate a range loop.
+// Note 3: The select statement lets a goroutine wait on multiple communication operations.
+//  A select blocks until one of its cases can run, then it executes that case. It chooses one at random if multiple are ready.
+func TestChannelRange(t *testing.T) {
+	messages := make(chan string, 4)
+
+	messages <- "first"
+	messages <- "second"
+	messages <- "third"
+
+	close(messages) // close won't stop loop until all earlier sent messages are consumed first
+
+	// messages <- "oops, I cannot take more"  // panic: send on closed channel
+
+	// iterates over received messages until channel is EMPTY and CLOSED
+	// so will print all first, second, third even if channel has already been closed before following loop starts
+	for msg := range messages {
+		fmt.Println(msg)
+	}
+}
+
 func TestChannel(t *testing.T) {
 
 	// Channel and buffer channel
@@ -140,7 +163,7 @@ func TestDeadlock(t *testing.T) {
 	// This Test will not report panic but if run with go run, the situation results into PANIC.
 	// fatal error: all goroutines are asleep - deadlock!
 	// ch <- "exceeded capacity" 	(Test: blocks indefinitely, Main: PANIC)
-	
+
 	fmt.Println(<-ch)
 	fmt.Println(<-ch)
 }
