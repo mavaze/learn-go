@@ -2,6 +2,7 @@ package examples
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 )
 
@@ -12,12 +13,17 @@ type Fetcher interface {
 
 // Crawl uses fetcher to recursively crawl pages starting with url, to a maximum of depth.
 func Crawl(url string, depth int, fetcher Fetcher) {
-	// TODO: Fetch URLs in parallel.
-	// TODO: Don't fetch the same URL twice.
-	// This implementation doesn't do either:
+	defer wg.Done()
 	if depth <= 0 {
 		return
 	}
+
+	// Don't fetch the same URL twice.
+	if !monitor.LoadOrStore(url) {
+		fmt.Printf("... Skipping %s\n", url)
+		return
+	}
+
 	body, urls, err := fetcher.Fetch(url)
 	if err != nil {
 		fmt.Println(err)
@@ -25,22 +31,52 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 	}
 	fmt.Printf("found: %s %q\n", url, body)
 	for _, u := range urls {
-		Crawl(u, depth-1, fetcher)
+		wg.Add(1)
+		// Fetch URLs in parallel.
+		go Crawl(u, depth-1, fetcher)
 	}
-	return
 }
+
+var wg sync.WaitGroup
+var monitor = NewMonitor()
 
 func TestWebCrawler(t *testing.T) {
-	Crawl("https://golang.org/", 4, fetcher)
+	wg.Add(1)
+	go Crawl("https://golang.org/", 4, fetcher)
+	wg.Wait()
+	fmt.Println("Finished crawling the webpages")
 }
 
-// fakeFetcher is Fetcher that returns canned results.
-type fakeFetcher map[string]*fakeResult
+type Monitor struct {
+	mux  sync.Mutex
+	urls map[string]struct{}
+}
 
+func NewMonitor() *Monitor {
+	return &Monitor{
+		urls: make(map[string]struct{}),
+	}
+}
+
+func (m *Monitor) LoadOrStore(url string) bool {
+	if _, ok := m.urls[url]; ok {
+		return false
+	}
+	m.mux.Lock()
+	defer m.mux.Unlock()
+	if _, ok := m.urls[url]; ok {
+		return false
+	}
+	m.urls[url] = struct{}{}
+	return true
+}
 type fakeResult struct {
 	body string
 	urls []string
 }
+
+// fakeFetcher is Fetcher that returns canned results.
+type fakeFetcher map[string]*fakeResult
 
 func (f fakeFetcher) Fetch(url string) (string, []string, error) {
 	if res, ok := f[url]; ok {
