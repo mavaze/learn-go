@@ -2,6 +2,7 @@ package examples
 
 import (
 	"fmt"
+	"runtime"
 	"sync"
 	"testing"
 )
@@ -19,8 +20,8 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 	}
 
 	// Don't fetch the same URL twice.
-	if !monitor.LoadOrStore(url) {
-		fmt.Printf("... Skipping %s\n", url)
+	if _, loaded := monitor.LoadOrStore(url, struct{}{}); loaded {
+		// fmt.Printf("... Skipping %s\n", url)
 		return
 	}
 
@@ -38,7 +39,9 @@ func Crawl(url string, depth int, fetcher Fetcher) {
 }
 
 var wg sync.WaitGroup
-var monitor = NewMonitor()
+
+// var monitor = NewMonitor() // faster and efficient (1 B/op, 0 allocs/op) than sync.Map
+var monitor sync.Map // slower and less efficient (17 B/op, 1 allocs/op) than our custom implementation using RWMutex
 
 func TestWebCrawler(t *testing.T) {
 	wg.Add(1)
@@ -47,8 +50,20 @@ func TestWebCrawler(t *testing.T) {
 	fmt.Println("Finished crawling the webpages")
 }
 
+func BenchmarkWebCrawler(b *testing.B) {
+	before := runtime.NumGoroutine()
+	b.RunParallel(func(pb *testing.PB) {
+		for pb.Next() {
+			wg.Add(1)
+			go Crawl("https://golang.org/", 4, fetcher)
+		}
+	})
+	wg.Wait()
+	fmt.Printf("Finished crawling the webpages. Go routines Before: %d and After: %d\n", before, runtime.NumGoroutine())
+}
+
 type Monitor struct {
-	mux  sync.Mutex
+	mux  sync.RWMutex
 	urls map[string]struct{}
 }
 
@@ -58,18 +73,22 @@ func NewMonitor() *Monitor {
 	}
 }
 
-func (m *Monitor) LoadOrStore(url string) bool {
+func (m *Monitor) LoadOrStore(url string, value interface{}) (alwaysNil interface{}, loaded bool) {
+	m.mux.RLock()
 	if _, ok := m.urls[url]; ok {
-		return false
+		m.mux.RUnlock()
+		return nil, true
 	}
+	m.mux.RUnlock()
 	m.mux.Lock()
 	defer m.mux.Unlock()
 	if _, ok := m.urls[url]; ok {
-		return false
+		return nil, true
 	}
 	m.urls[url] = struct{}{}
-	return true
+	return nil, false
 }
+
 type fakeResult struct {
 	body string
 	urls []string

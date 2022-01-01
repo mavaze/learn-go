@@ -176,6 +176,7 @@ func TestWorkgroup(t *testing.T) {
 	// Create a buffered channel to manage the employee vs project load.
 	projects := make(chan string, 10)
 
+	// Note: if a WaitGroup is explicitly passed into functions, it should be done by pointer.
 	// Launch 5 goroutines to handle the projects.
 	waitGroup.Add(5)
 	for i := 1; i <= 5; i++ {
@@ -189,6 +190,62 @@ func TestWorkgroup(t *testing.T) {
 	// Close the channel so the goroutines will quit
 	close(projects)
 	waitGroup.Wait()
+}
+
+func TestClosure(t *testing.T) {
+	done := make(chan bool)
+
+	values := []string{"a", "b", "c"}
+
+	// Option 1: Error: When  closure runs, it prints the value of v at time fmt.Println is executed,
+	// but v may have been modified since the goroutine was launched.
+	for _, v := range values {
+		fmt.Println("outside", v)
+		go func() {
+			fmt.Println("inside", v) // This will print c, c, c and NOT a, b, c
+			done <- true
+		}()
+	}
+
+	// Option 2: To bind the current value of v to each closure as it is launched,
+	// one must modify the inner loop to create a new variable each iteration.
+	// One way is to pass the variable as an argument to the closure:
+	for _, v := range values {
+		go func(u string) {
+			fmt.Println(u)
+			done <- true
+		}(v)
+	}
+
+	// Option 3: Even easier is just to create a new variable, using a declaration style that may seem odd but works fine in Go:
+	for _, v := range values {
+		v := v // create a new 'v'.
+		go func() {
+			fmt.Println(v)
+			done <- true
+		}()
+	}
+
+	// wait for all goroutines to complete before exiting
+	for range values {
+		<-done
+	}
+}
+
+func TestConcurrentMapOps(t *testing.T) {
+	m := make(map[int]int)
+	go func() {
+		for {
+			_ = m[1] // fatal error: concurrent map read and map write
+		}
+	}()
+	go func() {
+		for {
+			m[2] = 2
+		}
+	}()
+
+	select {}
 }
 
 func goRoutine(projects chan string, employee int) {
