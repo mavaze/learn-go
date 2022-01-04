@@ -146,6 +146,83 @@ func TestBinarySearch(t *testing.T) {
 	}
 }
 
+// https://leetcode.com/problems/longest-substring-without-repeating-characters
+// Given a string s, find the length of the longest substring without repeating characters.
+func TestLengthOfLongestSubstring(t *testing.T) {
+
+	type Results struct {
+		expected int
+		input    string
+	}
+
+	testCases := []Results{
+		{3, "pwwkew"},
+		{0, ""},
+		{1, "a"},
+		{1, "aaaaa"},
+		{2, "aaaaabbbc"},
+		{3, "dvdf"},
+	}
+
+	t.Run("with-two-loops", func(t *testing.T) {
+		func1 := func(s string) int {
+			if s == "" {
+				return 0
+			}
+			var end, length int = 0, 1
+			var visited map[byte]int
+			for start := 0; start < len(s)-length; start++ {
+				end = start
+				visited = make(map[byte]int)
+				for ; end < len(s); end++ {
+					if _, ok := visited[s[end]]; ok {
+						break
+					}
+					visited[s[end]] = end
+				}
+				length = max(length, end-start)
+			}
+			return length
+		}
+		for i, tc := range testCases {
+			actual := func1(tc.input)
+			if actual != tc.expected {
+				t.Errorf("Tesstcase [%d] failed, Expected [%d] but wrongly calculated to [%d]", i, tc.expected, actual)
+			}
+		}
+	})
+
+	t.Run("with-single-loop", func(t *testing.T) {
+		func2 := func(s string) int {
+			if s == "" {
+				return 0
+			}
+			strMap := map[byte]int{}
+			var maxLength int = 1
+			var start, end int
+			for i := 0; i < len(s); i++ {
+				index, ok := strMap[s[i]]
+				if ok {
+					if start < index+1 {
+						start = index + 1
+					}
+				}
+				end = i
+				maxLength = max(maxLength, (end-start)+1)
+				strMap[s[i]] = i
+			}
+			return maxLength
+		}
+
+		for i, tc := range testCases {
+			actual := func2(tc.input)
+			if actual != tc.expected {
+				t.Errorf("Tesstcase [%d] failed, Expected [%d] but wrongly calculated to [%d]", i, tc.expected, actual)
+			}
+		}
+	})
+}
+
 var min = func(a, b int) int {
 	if a < b {
 		return a
